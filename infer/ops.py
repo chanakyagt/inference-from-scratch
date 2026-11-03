@@ -31,3 +31,14 @@ def apply_rope(x, cos, sin, positions):
     half = x.shape[-1] // 2
     x1, x2 = x[..., :half], x[..., half:]
     return np.concatenate([x1 * c - x2 * s, x1 * s + x2 * c], axis=-1)
+
+
+def causal_mask(q_len, kv_len):
+    return np.triu(np.ones((q_len, kv_len), dtype=bool), k=kv_len - q_len + 1)
+
+
+def scaled_dot_product_attention(q, k, v, mask=None):
+    scores = q @ np.swapaxes(k, -1, -2) / np.sqrt(q.shape[-1])
+    if mask is not None:
+        scores = np.where(mask, -np.inf, scores)
+    return softmax(scores) @ v

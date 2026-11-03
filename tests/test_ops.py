@@ -1,7 +1,16 @@
 import numpy as np
 import torch
 
-from infer.ops import apply_rope, rms_norm, rope_frequencies, silu, softmax, swiglu_mlp
+from infer.ops import (
+    apply_rope,
+    causal_mask,
+    rms_norm,
+    rope_frequencies,
+    scaled_dot_product_attention,
+    silu,
+    softmax,
+    swiglu_mlp,
+)
 
 
 def test_softmax_matches_torch():
@@ -44,3 +53,16 @@ def test_rope_scores_depend_only_on_relative_position():
     score = lambda m, n: (apply_rope(q, cos, sin, [m]) @ apply_rope(k, cos, sin, [n]).T).item()
     np.testing.assert_allclose(np.linalg.norm(apply_rope(q, cos, sin, [7])), np.linalg.norm(q))
     np.testing.assert_allclose(score(10, 3), score(40, 33))
+
+
+def test_causal_attention_matches_torch():
+    q, k, v = np.random.default_rng(5).standard_normal((3, 2, 7, 16)).astype(np.float32)
+    expected = torch.nn.functional.scaled_dot_product_attention(*map(torch.from_numpy, (q, k, v)), is_causal=True).numpy()
+    np.testing.assert_allclose(scaled_dot_product_attention(q, k, v, causal_mask(7, 7)), expected, rtol=1e-5, atol=1e-5)
+
+
+def test_last_query_sees_every_key():
+    q, k, v = np.random.default_rng(6).standard_normal((3, 7, 16))
+    full = scaled_dot_product_attention(q, k, v, causal_mask(7, 7))
+    single = scaled_dot_product_attention(q[-1:], k, v, causal_mask(1, 7))
+    np.testing.assert_allclose(single, full[-1:])
