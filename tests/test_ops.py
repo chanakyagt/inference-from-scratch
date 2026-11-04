@@ -4,6 +4,7 @@ import torch
 from infer.ops import (
     apply_rope,
     causal_mask,
+    multi_head_attention,
     rms_norm,
     rope_frequencies,
     scaled_dot_product_attention,
@@ -66,3 +67,15 @@ def test_last_query_sees_every_key():
     full = scaled_dot_product_attention(q, k, v, causal_mask(7, 7))
     single = scaled_dot_product_attention(q[-1:], k, v, causal_mask(1, 7))
     np.testing.assert_allclose(single, full[-1:])
+
+
+def test_multi_head_attention_matches_torch():
+    rng = np.random.default_rng(8)
+    x = rng.standard_normal((6, 16)).astype(np.float32)
+    wq, wk, wv, wo = rng.standard_normal((4, 16, 16)).astype(np.float32) / 4
+    mha = torch.nn.MultiheadAttention(16, 4, bias=False)
+    mha.in_proj_weight.data = torch.from_numpy(np.concatenate([wq.T, wk.T, wv.T]))
+    mha.out_proj.weight.data = torch.from_numpy(wo.T.copy())
+    t = torch.from_numpy(x)
+    expected = mha(t, t, t, attn_mask=torch.from_numpy(causal_mask(6, 6)), need_weights=False)[0].detach().numpy()
+    np.testing.assert_allclose(multi_head_attention(x, wq, wk, wv, wo, 4, causal_mask(6, 6)), expected, rtol=1e-4, atol=1e-5)

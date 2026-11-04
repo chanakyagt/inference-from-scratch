@@ -42,3 +42,18 @@ def scaled_dot_product_attention(q, k, v, mask=None):
     if mask is not None:
         scores = np.where(mask, -np.inf, scores)
     return softmax(scores) @ v
+
+
+def split_heads(x, n_heads):
+    *lead, seq, dim = x.shape
+    return np.swapaxes(x.reshape(*lead, seq, n_heads, dim // n_heads), -2, -3)
+
+
+def merge_heads(x):
+    x = np.swapaxes(x, -2, -3)
+    return x.reshape(*x.shape[:-2], -1)
+
+
+def multi_head_attention(x, wq, wk, wv, wo, n_heads, mask=None):
+    q, k, v = (split_heads(x @ w, n_heads) for w in (wq, wk, wv))
+    return merge_heads(scaled_dot_product_attention(q, k, v, mask)) @ wo
