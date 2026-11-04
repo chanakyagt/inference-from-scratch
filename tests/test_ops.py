@@ -4,6 +4,7 @@ import torch
 from infer.ops import (
     apply_rope,
     causal_mask,
+    grouped_query_attention,
     multi_head_attention,
     rms_norm,
     rope_frequencies,
@@ -79,3 +80,17 @@ def test_multi_head_attention_matches_torch():
     t = torch.from_numpy(x)
     expected = mha(t, t, t, attn_mask=torch.from_numpy(causal_mask(6, 6)), need_weights=False)[0].detach().numpy()
     np.testing.assert_allclose(multi_head_attention(x, wq, wk, wv, wo, 4, causal_mask(6, 6)), expected, rtol=1e-4, atol=1e-5)
+
+
+def test_grouped_query_attention_matches_torch_gqa():
+    rng = np.random.default_rng(9)
+    x = rng.standard_normal((6, 16)).astype(np.float32)
+    wq, wo = rng.standard_normal((2, 16, 16)).astype(np.float32) / 4
+    wk, wv = rng.standard_normal((2, 16, 8)).astype(np.float32) / 4
+    heads = lambda a, n: torch.from_numpy(a).reshape(6, n, 4).transpose(0, 1)
+    out = torch.nn.functional.scaled_dot_product_attention(
+        heads(x @ wq, 4), heads(x @ wk, 2), heads(x @ wv, 2), is_causal=True, enable_gqa=True
+    )
+    expected = (out.transpose(0, 1).reshape(6, 16) @ torch.from_numpy(wo)).numpy()
+    np.testing.assert_allclose(grouped_query_attention(x, wq, wk, wv, wo, 4, 2, causal_mask(6, 6)), expected, rtol=1e-4, atol=1e-5)
+    np.testing.assert_allclose(grouped_query_attention(x, wq, wq, wo, wo, 4, 4), multi_head_attention(x, wq, wq, wo, wo, 4), rtol=1e-6)

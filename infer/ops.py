@@ -57,3 +57,13 @@ def merge_heads(x):
 def multi_head_attention(x, wq, wk, wv, wo, n_heads, mask=None):
     q, k, v = (split_heads(x @ w, n_heads) for w in (wq, wk, wv))
     return merge_heads(scaled_dot_product_attention(q, k, v, mask)) @ wo
+
+
+def repeat_kv(x, n_rep):
+    return np.repeat(x, n_rep, axis=-3)
+
+
+def grouped_query_attention(x, wq, wk, wv, wo, n_heads, n_kv_heads, mask=None):
+    q = split_heads(x @ wq, n_heads)
+    k, v = (repeat_kv(split_heads(x @ w, n_kv_heads), n_heads // n_kv_heads) for w in (wk, wv))
+    return merge_heads(scaled_dot_product_attention(q, k, v, mask)) @ wo
