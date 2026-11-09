@@ -1,6 +1,6 @@
 import numpy as np
 
-from infer.ops import apply_rope, causal_mask, merge_heads, repeat_kv, rms_norm, scaled_dot_product_attention, split_heads, swiglu_mlp
+from infer.ops import apply_rope, causal_mask, merge_heads, repeat_kv, rms_norm, rope_frequencies, scaled_dot_product_attention, split_heads, swiglu_mlp
 
 
 def init_weights(config, seed=0, std=0.02):
@@ -46,3 +46,12 @@ def transformer_block(x, layer, config, cos, sin, positions):
     h = x + rope_attention(rms_norm(x, layer["attn_norm"], config.norm_eps), layer, config, cos, sin, positions)
     mlp_in = rms_norm(h, layer["mlp_norm"], config.norm_eps)
     return h + swiglu_mlp(mlp_in, layer["w_gate"], layer["w_up"], layer["w_down"])
+
+
+def forward(tokens, weights, config):
+    cos, sin = rope_frequencies(config.head_dim, config.max_positions, config.rope_base)
+    positions = np.arange(len(tokens))
+    x = weights["embed"][tokens]
+    for layer in weights["layers"]:
+        x = transformer_block(x, layer, config, cos, sin, positions)
+    return rms_norm(x, weights["final_norm"], config.norm_eps) @ weights["lm_head"]

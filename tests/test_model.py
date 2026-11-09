@@ -1,7 +1,7 @@
 import numpy as np
 
 from infer.config import ModelConfig
-from infer.model import init_weights, transformer_block
+from infer.model import forward, init_weights, transformer_block
 from infer.ops import rope_frequencies
 
 
@@ -27,3 +27,12 @@ def test_transformer_block_residuals_and_causality():
     np.testing.assert_allclose(transformer_block(x[:4], layer, config, cos, sin, np.arange(4)), out[:4], rtol=1e-5, atol=1e-6)
     silent = dict(layer, wo=np.zeros_like(layer["wo"]), w_down=np.zeros_like(layer["w_down"]))
     np.testing.assert_array_equal(transformer_block(x, silent, config, cos, sin, np.arange(6)), x)
+
+
+def test_forward_logits_shape_and_causality():
+    config = ModelConfig()
+    weights = init_weights(config, seed=4)
+    tokens = np.array([5, 17, 200, 3, 42])
+    logits = forward(tokens, weights, config)
+    assert logits.shape == (5, config.vocab_size)
+    np.testing.assert_allclose(forward(tokens[:3], weights, config), logits[:3], rtol=1e-5, atol=1e-6)
