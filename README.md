@@ -12,3 +12,5 @@ python -m pytest -q
 ## What's inside
 
 - `infer/ops.py` — numerically stable softmax, RMSNorm
+- `infer/config.py` — frozen `ModelConfig` with head-count validation
+- `infer/model.py` — Llama-style decoder: RoPE, grouped-query attention, SwiGLU MLP, pre-norm residual blocks, logits; matches an independent float64 PyTorch implementation
